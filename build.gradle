@@ -1,0 +1,51 @@
+plugins {
+    id 'java'
+}
+
+group = 'org.example.gamelogic'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+    maven { url = uri("https://repo.papermc.io/repository/maven-public/") }
+    maven { url = "https://oss.sonatype.org/content/groups/public/" }
+    maven { url = "https://repo.dmulloy2.net/repository/public/" }
+}
+
+def serverPluginsDir = "D:/MyServer/plugins"
+
+tasks.register('copyPlugin', Copy) {
+    dependsOn build
+    from "$buildDir/libs"
+    include '*.jar'
+    into serverPluginsDir
+}
+
+build.finalizedBy(copyPlugin)
+
+dependencies {
+    compileOnly("io.papermc.paper:paper-api:1.20.4-R0.1-SNAPSHOT")
+    compileOnly group: "com.comphenix.protocol", name: "ProtocolLib", version: "5.3.0";
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+    toolchain.languageVersion = JavaLanguageVersion.of(21)
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release.set(21)
+}
+
+processResources {
+    def props = [version: version]
+    inputs.properties props
+    filteringCharset 'UTF-8'
+    filesMatching('plugin.yml') {
+        expand props
+    }
+    filesMatching('paper-plugin.yml') {
+        expand props
+    }
+}
