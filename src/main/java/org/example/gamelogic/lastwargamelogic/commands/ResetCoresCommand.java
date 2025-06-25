@@ -1,5 +1,6 @@
 package org.example.gamelogic.lastwargamelogic.commands;
 
+import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -23,8 +24,8 @@ public class ResetCoresCommand implements CommandExecutor {
             sender.sendMessage("§cOnly OP players can use this command.");
             return true;
         }
-
-        coreSpawner.spawnCoresForce();
+        World world = ((Player) sender).getWorld();
+        coreSpawner.spawnCoresForce(world);
         sender.sendMessage("§aCores have been reset.");
         return true;
     }

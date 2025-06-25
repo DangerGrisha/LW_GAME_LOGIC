@@ -8,6 +8,7 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.block.BlockExplodeEvent;
+import org.example.gamelogic.lastwargamelogic.LastWarGameLogic;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -20,11 +21,14 @@ public class ProtectionManager implements Listener {
     }
 
     private boolean isProtected(Block block) {
+        if (!LastWarGameLogic.getActiveGameWorlds().contains(block.getWorld())) return false;
+
         for (ProtectedRegion region : regions) {
             if (region.contains(block)) return true;
         }
         return false;
     }
+
 
     @EventHandler
     public void onBlockBreak(BlockBreakEvent event) {

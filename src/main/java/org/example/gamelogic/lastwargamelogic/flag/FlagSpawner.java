@@ -2,9 +2,11 @@
 package org.example.gamelogic.lastwargamelogic.flag;
 
 import net.kyori.adventure.text.Component;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.World;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.EntityType;
 import org.bukkit.inventory.EquipmentSlot;
@@ -47,6 +49,9 @@ public class FlagSpawner {
         stand.getEquipment().setItem(EquipmentSlot.HAND, dye);
         stand.addEquipmentLock(EquipmentSlot.HAND, ArmorStand.LockType.REMOVING_OR_CHANGING);
 
+        // Добавляем тег "flag"
+        stand.addScoreboardTag("flag");
+
         stand.getPersistentDataContainer().set(
                 new NamespacedKey(plugin, "flag"),
                 PersistentDataType.INTEGER,
@@ -54,5 +59,9 @@ public class FlagSpawner {
         );
 
         return stand;
+    }
+    public void spawnAtFixedLocation(World world) {
+        Location location = new Location(world, -179.5, 41, 294.5);
+        spawnAndReturn(location);
     }
 }

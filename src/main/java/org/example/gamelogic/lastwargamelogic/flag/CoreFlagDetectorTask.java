@@ -9,8 +9,12 @@ import org.bukkit.entity.Firework;
 import org.bukkit.inventory.meta.FireworkMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
+
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.scoreboard.Objective;
+import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.util.Vector;
+import org.example.gamelogic.lastwargamelogic.LastWarGameLogic;
 
 public class CoreFlagDetectorTask extends BukkitRunnable {
 
@@ -22,50 +26,94 @@ public class CoreFlagDetectorTask extends BukkitRunnable {
 
     @Override
     public void run() {
-        World world = Bukkit.getWorld("lastwarGame1");
-        if (world == null) return;
-
+        for (World world : LastWarGameLogic.getActiveGameWorlds()) {
+            runForWorld(world); // вызываем уже существующий метод
+        }
+    }
+    private void runForWorld(World world) {
         NamespacedKey flagKey = new NamespacedKey(plugin, "flag");
         NamespacedKey coreKey = new NamespacedKey(plugin, "core");
+
+        for (Entity entity : world.getEntities()) {
+            if (isCore(entity)) {
+                rotateCore((ArmorStand) entity);
+            }
+
+            if (!(entity instanceof ArmorStand flag)) continue;
+            if (!flag.getPersistentDataContainer().has(flagKey, PersistentDataType.INTEGER)) continue;
+
+            checkFlagProximity(flag, world);
+        }
+    }
+
+
+    private void checkFlagProximity(ArmorStand flag, World world) {
+        NamespacedKey coreKey = new NamespacedKey(plugin, "core");
+
+        for (Entity nearby : world.getNearbyEntities(flag.getLocation(), 1.5, 1.5, 1.5)) {
+            if (!(nearby instanceof ArmorStand core)) continue;
+            if (!core.getPersistentDataContainer().has(coreKey, PersistentDataType.STRING)) continue;
+
+            handleGoal(core, flag);
+            break;
+        }
+    }
+    public void handleExternalGoal(ArmorStand core, ArmorStand flag) {
+        handleGoal(core, flag); // приватный метод ты уже сделал
+    }
+
+    private void handleGoal(ArmorStand core, ArmorStand flag) {
         NamespacedKey coreRedKey = new NamespacedKey(plugin, "core_red");
         NamespacedKey coreBlueKey = new NamespacedKey(plugin, "core_blue");
 
-        for (Entity entity : world.getEntities()) {
-            // ROTATE cores
-            if (entity instanceof ArmorStand core &&
-                    core.getPersistentDataContainer().has(coreKey, PersistentDataType.STRING)) {
+        Scoreboard scoreboard = Bukkit.getScoreboardManager().getMainScoreboard();
+        World world = core.getWorld();
+        Objective objective = scoreboard.getObjective(world.getName());
 
-                Location loc = core.getLocation();
-                loc.setYaw(loc.getYaw() + 5); // rotate 5 degrees every tick
-                core.teleport(loc);
-            }
-
-            // Check if it's a flag
-            if (!(entity instanceof ArmorStand stand)) continue;
-            var container = stand.getPersistentDataContainer();
-
-            if (!container.has(flagKey, PersistentDataType.INTEGER)) continue;
-
-            // Check if flag is close to a core
-            for (Entity nearby : world.getNearbyEntities(stand.getLocation(), 1.5, 1.5, 1.5)) {
-                if (!(nearby instanceof ArmorStand core)) continue;
-                var coreData = core.getPersistentDataContainer();
-
-                if (!coreData.has(coreKey, PersistentDataType.STRING)) continue;
-
-                if (coreData.has(coreRedKey, PersistentDataType.INTEGER)) {
-                    Bukkit.broadcastMessage("§b Blue scored a goal!");
-                    playEffects(core.getLocation(), Color.BLUE);
-                } else if (coreData.has(coreBlueKey, PersistentDataType.INTEGER)) {
-                    Bukkit.broadcastMessage("§c Red scored a goal!");
-                    playEffects(core.getLocation(), Color.RED);
-                }
-
-                stand.remove(); // remove the flag
-                break;
-            }
+        if (objective == null) {
+            Bukkit.getLogger().warning("[LastWar] Objective for world " + world.getName() + " not found.");
+            return;
         }
+
+        if (core.getPersistentDataContainer().has(coreRedKey, PersistentDataType.INTEGER)) {
+            Bukkit.broadcastMessage("§bBlue scored a goal!");
+            playEffects(core.getLocation(), Color.BLUE);
+
+            // ✅ Увеличиваем счёт BLUE
+            int prev = objective.getScore("BLUE").getScore();
+            objective.getScore("BLUE").setScore(prev + 1);
+
+        } else if (core.getPersistentDataContainer().has(coreBlueKey, PersistentDataType.INTEGER)) {
+            Bukkit.broadcastMessage("§cRed scored a goal!");
+            playEffects(core.getLocation(), Color.RED);
+
+            // ✅ Увеличиваем счёт RED
+            int prev = objective.getScore("RED").getScore();
+            objective.getScore("RED").setScore(prev + 1);
+        }
+
+        // ❌ Удаляем флаг
+        flag.remove();
+
+        // ✅ Обновляем флаг isGoalScored = 1
+        objective.getScore("isGoalScored").setScore(1);
     }
+
+
+
+    private void rotateCore(ArmorStand core) {
+        Location loc = core.getLocation();
+        loc.setYaw(loc.getYaw() + 5); // вращаем на 5°
+        core.teleport(loc);
+    }
+    private boolean isCore(Entity entity) {
+        if (!(entity instanceof ArmorStand)) return false;
+
+        NamespacedKey coreKey = new NamespacedKey(plugin, "core");
+        return entity.getPersistentDataContainer().has(coreKey, PersistentDataType.STRING);
+    }
+
+
 
 
 

@@ -3,6 +3,7 @@ package org.example.gamelogic.lastwargamelogic;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
@@ -25,71 +26,97 @@ import org.example.gamelogic.lastwargamelogic.privat.RegionPresets;
 import org.example.gamelogic.lastwargamelogic.privat.SlowGrassBreakListener;
 import org.example.gamelogic.lastwargamelogic.timer.GameTimerManager;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class LastWarGameLogic extends JavaPlugin {
+    private static CoreSpawner coreSpawner;
+    private CoreFlagDetectorTask coreFlagDetectorTask;
+    private static final Set<World> activeWorlds = ConcurrentHashMap.newKeySet();
+
+    public CoreFlagDetectorTask getCoreFlagDetectorTask() {
+        return coreFlagDetectorTask;
+    }
+
+    public CoreSpawner getCoreSpawner() {
+        return coreSpawner;
+    }
+
+    public static void addActiveGameWorld(World world) {
+        activeWorlds.add(world);
+    }
+
+    public static void removeActiveGameWorld(World world) {
+        activeWorlds.remove(world);
+    }
+
+    public static Set<World> getActiveGameWorlds() {
+        return Collections.unmodifiableSet(activeWorlds);
+    }
 
     @Override
     public void onEnable() {
-        //Boarder manager = Danger Zones
+
+        // Инициализируем активные миры по scoreboard'у
+        Scoreboard scoreboard = Bukkit.getScoreboardManager().getMainScoreboard();
+        for (World world : Bukkit.getWorlds()) {
+            if (scoreboard.getObjective(world.getName()) != null) {
+                int value = scoreboard.getObjective(world.getName()).getScore("isGameStarted").getScore();
+                if (value == 1) {
+                    addActiveGameWorld(world);
+                    getLogger().info("[LastWar] World " + world.getName() + " marked as active.");
+                }
+            }
+        }
+
+
         DangerZoneManager dangerZoneManager = new DangerZoneManager(this);
 
-        int mapId = getCurrentMapId();
-        registerMapZones(mapId, dangerZoneManager);
+        registerMapZones(dangerZoneManager);
 
         dangerZoneManager.startMonitoring();
 
-
-        //Protection region , cant place, explode, break
         ProtectionManager protectionManager = new ProtectionManager();
         getServer().getPluginManager().registerEvents(protectionManager, this);
 
-        RegionPresets.registerMapRegions(mapId, protectionManager);
+        for (World world : LastWarGameLogic.getActiveGameWorlds()) {
+            RegionPresets.registerRegionsForWorld(world, protectionManager);
+        }
 
-        //Listeners
 
-        getServer().getPluginManager().registerEvents(new SlowGrassBreakListener(this, getCurrentMapId()), this);
+        coreFlagDetectorTask = new CoreFlagDetectorTask(this);
+        coreFlagDetectorTask.runTaskTimer(this, 0L, 5L);
+
+        getServer().getPluginManager().registerEvents(new SlowGrassBreakListener(this), this);
+
         getServer().getPluginManager().registerEvents(new DropControlListener(), this);
 
-        //CORE SPAWNER
-        new CoreSpawner(this).spawnCoresIfNeeded();
         new CoreFlagDetectorTask(this).runTaskTimer(this, 0L, 1L);
 
-        //Time manager
         new GameTimerManager(this).startTimer();
-        //DeathManager
         getServer().getPluginManager().registerEvents(new DeathSpectatorListener(this), this);
 
-        //Flag system
-        // Flag system initialization
-        FlagSpawner flagSpawner = new FlagSpawner(this); // ✅ Create once
-
-        // Register command with spawner
+        FlagSpawner flagSpawner = new FlagSpawner(this);
         getCommand("spawnflag").setExecutor(new SpawnFlagCommand(flagSpawner));
 
-        // Shared map for pickup delay
         Map<UUID, Long> pickupBlockMap = new HashMap<>();
 
-        // Register listeners
         getServer().getPluginManager().registerEvents(new BowChargeListener(this), this);
         FlagDropListener flagDropListener = new FlagDropListener(this, flagSpawner, pickupBlockMap);
         getServer().getPluginManager().registerEvents(flagDropListener, this);
         getServer().getPluginManager().registerEvents(new FlagHitListener(this, pickupBlockMap, flagDropListener), this);
         getServer().getPluginManager().registerEvents(new FlagBowShootListener(this, flagSpawner, pickupBlockMap), this);
 
-        // Start tracker task (e.g. helmet banner logic)
-        new FlagTrackerTask(this).runTaskTimer(this, 0L, 10L); // every 10 ticks (0.5 sec)
+        new FlagTrackerTask(this).runTaskTimer(this, 0L, 10L);
 
-        CoreSpawner coreSpawner = new CoreSpawner(this);
+        coreSpawner = new CoreSpawner(this);
         getCommand("resetcores").setExecutor(new ResetCoresCommand(this, coreSpawner));
 
-
-
-        Scoreboard scoreboard = Bukkit.getScoreboardManager().getMainScoreboard();
-
+        scoreboard = Bukkit.getScoreboardManager().getMainScoreboard();
         Team red = scoreboard.getTeam("RED");
         if (red == null) red = scoreboard.registerNewTeam("RED");
         red.setCanSeeFriendlyInvisibles(true);
@@ -105,36 +132,21 @@ public final class LastWarGameLogic extends JavaPlugin {
         blue.setColor(ChatColor.BLUE);
     }
 
-
     @Override
     public void onDisable() {
-        // Plugin shutdown logic
+        activeWorlds.clear();
     }
 
-    private int getCurrentMapId() {
-        var scoreboard = Bukkit.getScoreboardManager().getMainScoreboard();
-        var generalVars = scoreboard.getObjective("GENERAL_VARIABLES");
 
-        if (generalVars == null) return -1;
-
-        return generalVars.getScore("map").getScore();
-    }
-
-    private void registerMapZones(int mapId, DangerZoneManager manager) {
-        if (mapId == 0) {
-
-            var world = Bukkit.getWorld("lastwarGame1");
-            Set<String> teams = Set.of("RED", "BLUE");
-
-            manager.addZone(new DangerZone(new Location(world, -286, 112, 91), new Location(world, -263, 0, 499), teams));
-            manager.addZone(new DangerZone(new Location(world, -262, 112, 91), new Location(world, -54, 0, 106), teams));
-            manager.addZone(new DangerZone(new Location(world, -54, 112, 107), new Location(world, -70, 0, 498), teams));
-            manager.addZone(new DangerZone(new Location(world, -71, 112, 498), new Location(world, -262, 0, 483), teams));
-            manager.addZone(new DangerZone(new Location(world, -276, 113, 499), new Location(world, -54, 255, 92), teams));   // top
-            manager.addZone(new DangerZone(new Location(world, -276, 30, 499), new Location(world, -54, -64, 92), teams));     // bottom
-
+    private void registerMapZones(DangerZoneManager manager) {
+        Set<String> teams = Set.of("RED", "BLUE");
+        for (World world : activeWorlds) {
+                manager.addZone(new DangerZone(new Location(world, -286, 112, 91), new Location(world, -263, 0, 499), teams));
+                manager.addZone(new DangerZone(new Location(world, -262, 112, 91), new Location(world, -54, 0, 106), teams));
+                manager.addZone(new DangerZone(new Location(world, -54, 112, 107), new Location(world, -70, 0, 498), teams));
+                manager.addZone(new DangerZone(new Location(world, -71, 112, 498), new Location(world, -262, 0, 483), teams));
+                manager.addZone(new DangerZone(new Location(world, -276, 113, 499), new Location(world, -54, 255, 92), teams));
+                manager.addZone(new DangerZone(new Location(world, -276, 30, 499), new Location(world, -54, -64, 92), teams));
         }
     }
-
-
 }

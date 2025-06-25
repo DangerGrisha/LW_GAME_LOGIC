@@ -4,6 +4,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.example.gamelogic.lastwargamelogic.LastWarGameLogic;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -21,19 +22,6 @@ public class DangerZoneManager {
         zones.add(zone);
     }
 
-    // Checks if the game is running based on scoreboard values
-    private boolean isGameRunning() {
-        var scoreboard = Bukkit.getScoreboardManager().getMainScoreboard();
-        var generalVars = scoreboard.getObjective("GENERAL_VARIABLES");
-
-        if (generalVars == null) return false;
-
-        int isGameStarted = generalVars.getScore("isGameStarted").getScore();
-        int map = generalVars.getScore("map").getScore();
-
-        return isGameStarted == 1;
-    }
-
 
     // Starts the repeating task to check for players in danger zones
     public void startMonitoring() {
@@ -41,12 +29,15 @@ public class DangerZoneManager {
             @Override
             public void run() {
                 for (Player player : Bukkit.getOnlinePlayers()) {
+                    if (!LastWarGameLogic.getActiveGameWorlds().contains(player.getWorld())) continue;
+
                     for (DangerZone zone : zones) {
                         if (zone.isInZone(player)) {
                             zone.applyEffect(player);
                         }
                     }
                 }
+
             }
         }.runTaskTimer(plugin, 0L, 10L); // Runs every 10 ticks = 0.5 seconds
     }

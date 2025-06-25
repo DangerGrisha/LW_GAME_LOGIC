@@ -21,28 +21,6 @@ public class CoreSpawner {
         this.plugin = plugin;
     }
 
-    public void spawnCoresIfNeeded() {
-        int mapId = getMapId();
-        if (mapId != 0) return;
-
-        World world = Bukkit.getWorld("lastwarGame1");
-        if (world == null) return;
-
-        clearAllArmorStands(world);
-
-        spawnCore(world, new Location(world, -167.5, 37.5, 121.5), DyeColor.BLUE, "ICE CORE", "blue");
-        spawnCore(world, new Location(world, -167.5, 37.5, 467.5), DyeColor.RED, "HELL CORE", "red");
-    }
-
-
-    private int getMapId() {
-        var scoreboard = Bukkit.getScoreboardManager().getMainScoreboard();
-        var objective = scoreboard.getObjective("GENERAL_VARIABLES");
-        if (objective == null) return -1;
-
-        return objective.getScore("map").getScore();
-    }
-
     private void spawnCore(World world, Location location, DyeColor color, String displayName, String sideTag) {
         NamespacedKey genericCoreKey = new NamespacedKey(plugin, "core");
         NamespacedKey specificCoreKey = new NamespacedKey(plugin, "core_" + sideTag.toLowerCase());
@@ -75,12 +53,15 @@ public class CoreSpawner {
         stand.getEquipment().setItem(EquipmentSlot.HAND, dye);
         stand.addEquipmentLock(EquipmentSlot.HAND, ArmorStand.LockType.REMOVING_OR_CHANGING);
 
-        // Tags for detection
+        // ✅ Добавляем scoreboard-тег (например: "red" или "blue")
+        stand.addScoreboardTag(sideTag.toLowerCase());
+
+        // Tags for detection in PersistentDataContainer (если нужно дополнительно)
         stand.getPersistentDataContainer().set(genericCoreKey, PersistentDataType.STRING, displayName);
         stand.getPersistentDataContainer().set(specificCoreKey, PersistentDataType.INTEGER, 1);
+
     }
-    public void spawnCoresForce() {
-        World world = Bukkit.getWorld("lastwarGame1");
+    public void spawnCoresForce(World world) {
         if (world == null) return;
 
         clearAllArmorStands(world);
@@ -90,10 +71,12 @@ public class CoreSpawner {
     }
 
 
-    private void clearAllArmorStands(World world) {
+    public void clearAllArmorStands(World world) {
         for (Entity entity : world.getEntities()) {
-            if (entity instanceof ArmorStand) {
-                entity.remove();
+            if (entity instanceof ArmorStand armorStand) {
+                if (armorStand.getScoreboardTags().contains("blue") || armorStand.getScoreboardTags().contains("red") || armorStand.getScoreboardTags().contains("flag")) {
+                    armorStand.remove();
+                }
             }
         }
     }
